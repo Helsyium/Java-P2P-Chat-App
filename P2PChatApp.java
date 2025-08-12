@@ -1,20 +1,9 @@
-/* 
-P2PChatApp.java dosyasında neler oluyor?
-
-main metodu, uygulamayı başlattığında bir giriş penceresi açıyor. Burada diğer bilgisayarın IP adresini giriyorsun.
-
-Eğer bir IP adresi girersen, uygulama o adrese bağlanmaya çalışıyor (istemci modu).
-
-Eğer boş bırakırsan, uygulama bağlantı beklemeye başlıyor (sunucu modu).
-
-appendMessage metodu, başka sınıflardan gelen mesajları sohbet alanına eklememizi sağlıyor.
- */
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.IOException;
+
 
 public class P2PChatApp extends JFrame {
 
@@ -61,9 +50,9 @@ public class P2PChatApp extends JFrame {
     
     // Mesaj gönderme metodu
     private void sendMessage() {
-        String message = messageField.getText();
-        if (!message.trim().isEmpty() && connectionManager != null) {
-            connectionManager.sendMessage(message);
+        String message = messageField.getText().trim();
+        if (!message.isEmpty() && connectionManager != null) {
+            connectionManager.broadcastMessage(message);
             chatArea.append("Sen: " + message + "\n");
             messageField.setText("");
         }
@@ -82,18 +71,42 @@ public class P2PChatApp extends JFrame {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             P2PChatApp app = new P2PChatApp();
-            String peerIp = JOptionPane.showInputDialog("Bağlanılacak bilgisayarın IP adresini girin (Bağlantı beklemek için boş bırakın):");
             
+            // Kullanıcı adını al
+            String username = JOptionPane.showInputDialog("Kullanıcı adınızı girin:");
+            if (username == null || username.trim().isEmpty()) {
+                username = "Kullanıcı" + System.currentTimeMillis() % 1000;
+            }
+            app.setTitle("P2P Sohbet - " + username);
+            
+            // Bağlantı yöneticisini başlat
             ConnectionManager manager = new ConnectionManager(app);
             app.setConnectionManager(manager);
             
-            // Eğer bir IP adresi girilirse istemci modunda çalışır
-            if (peerIp != null && !peerIp.trim().isEmpty()) {
+            // Sunucu modunu başlat (her düğüm bir sunucu olacak)
+            manager.startServer(8080);
+            
+            // Kullanıcıdan başka düğümlere bağlanma seçeneği sun
+            while (true) {
+                String peerIp = JOptionPane.showInputDialog(
+                    "Bağlanmak istediğiniz bilgisayarın IP adresini girin:\n" +
+                    "(Başka bağlantı yoksa veya işiniz bittiğinde boş bırakın)");
+                
+                if (peerIp == null || peerIp.trim().isEmpty()) {
+                    break;
+                }
+                
                 manager.connectToPeer(peerIp, 8080);
-            } else {
-                // IP adresi girilmezse sunucu modunda çalışır
-                manager.startServer(8080);
             }
+            
+            // Uygulama kapatılırken kaynakları temizle
+            app.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                    manager.shutdown();
+                    System.exit(0);
+                }
+            });
         });
     }
 }

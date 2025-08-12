@@ -1,35 +1,41 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.Socket;
+import java.net.SocketException;
 
 public class MessageListener extends Thread {
+    private final P2PChatApp app;
+    private final Socket socket;
+    private final ConnectionManager connectionManager;
 
-    private P2PChatApp app;
-    private Socket socket;
-
-    public MessageListener(P2PChatApp app, Socket socket) {
+    public MessageListener(P2PChatApp app, Socket socket, ConnectionManager connectionManager) {
         this.app = app;
         this.socket = socket;
+        this.connectionManager = connectionManager;
     }
 
     @Override
     public void run() {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
             String line;
-            while ((line = in.readLine()) != null) {
-                app.appendMessage("Arkadaş: " + line);
+            String peerAddress = socket.getInetAddress().getHostAddress();
+            
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    if ((line = in.readLine()) == null) {
+                        break; // Bağlantı koptu
+                    }
+                    app.appendMessage(peerAddress + ": " + line);
+                } catch (SocketException e) {
+                    if (!socket.isClosed()) {
+                        app.appendMessage("Bağlantı hatası: " + e.getMessage());
+                    }
+                    break;
+                }
             }
         } catch (IOException e) {
-            app.appendMessage("Bağlantı koptu.");
+            app.appendMessage("Giriş akışı hatası: " + e.getMessage());
         } finally {
-            try {
-                if (socket != null && !socket.isClosed()) {
-                    socket.close();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            connectionManager.closeConnection(socket);
         }
     }
 }
